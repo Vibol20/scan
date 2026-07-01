@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Attendance System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          brand: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' }
+        },
+        fontFamily: { sans: ['Inter','Noto Sans Khmer','sans-serif'] }
+      }
+    }
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+  body { font-family: 'Inter','Noto Sans Khmer',sans-serif; }
+  button,a { cursor:pointer; }
+  ::-webkit-scrollbar { width:5px; height:5px; }
+  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+  .dark ::-webkit-scrollbar-thumb { background:#475569; }
+
+  /* Animations */
+  .fade { animation: fadeIn .2s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Sidebar */
+  #sidebar { transition: transform .25s cubic-bezier(.4,0,.2,1); }
+  @media(max-width:1023px) { #sidebar.closed { transform:translateX(-100%); } }
+
+  .sidebar-link {
+    display:flex; align-items:center; gap:0.75rem;
+    padding:0.625rem 0.875rem; border-radius:0.875rem;
+    font-size:0.875rem; font-weight:500;
+    text-decoration:none; transition:all 0.15s ease;
+    white-space:nowrap;
+  }
+  .sidebar-link.active {
+    background:#2563eb; color:#fff;
+    box-shadow:0 4px 12px rgba(37,99,235,0.35);
+  }
+  .sidebar-link:not(.active) { color:#4b5563; }
+  .sidebar-link:not(.active):hover { background:#f3f4f6; color:#111827; }
+  .dark .sidebar-link:not(.active) { color:#d1d5db; }
+  .dark .sidebar-link:not(.active):hover { background:rgba(55,65,81,0.7); color:#f9fafb; }
+  .sidebar-link .fa-solid { width:1rem; text-align:center; flex-shrink:0; }
+
+  /* Cards */
+  .card {
+    background:#fff; border-radius:1rem;
+    border:1px solid #f1f5f9;
+    box-shadow:0 1px 3px rgba(0,0,0,0.06);
+  }
+  .dark .card { background:#1e293b; border-color:#334155; }
+
+  /* Buttons */
+  .btn-primary {
+    display:inline-flex; align-items:center; justify-content:center;
+    padding:0.5rem 1rem; border-radius:0.75rem;
+    background:#2563eb; color:#fff;
+    font-size:0.875rem; font-weight:600;
+    border:none; transition:all 0.15s ease;
+    box-shadow:0 2px 8px rgba(37,99,235,0.25);
+    text-decoration:none;
+  }
+  .btn-primary:hover { background:#1d4ed8; box-shadow:0 4px 12px rgba(37,99,235,0.35); }
+
+  .btn-secondary {
+    display:inline-flex; align-items:center; justify-content:center;
+    padding:0.5rem 1rem; border-radius:0.75rem;
+    background:#f1f5f9; color:#374151;
+    font-size:0.875rem; font-weight:500;
+    border:none; transition:all 0.15s ease;
+    text-decoration:none;
+  }
+  .btn-secondary:hover { background:#e2e8f0; }
+  .dark .btn-secondary { background:#334155; color:#e2e8f0; }
+  .dark .btn-secondary:hover { background:#475569; }
+
+  /* Inputs */
+  .inp {
+    width:100%; padding:0.625rem 0.875rem;
+    border-radius:0.75rem; border:1px solid #e2e8f0;
+    background:#f8fafc; font-size:0.875rem;
+    color:inherit; outline:none;
+    transition:border-color 0.15s ease, box-shadow 0.15s ease;
+    font-family:inherit;
+  }
+  .inp:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,0.15); background:#fff; }
+  .dark .inp { border-color:#475569; background:rgba(30,41,59,0.8); color:#f1f5f9; }
+  .dark .inp:focus { border-color:#3b82f6; background:#1e293b; }
+
+  /* Badges */
+  .badge-present,.badge-late,.badge-absent,.badge-active,.badge-inactive {
+    display:inline-flex; align-items:center;
+    padding:0.2rem 0.65rem; border-radius:9999px;
+    font-size:0.72rem; font-weight:600; white-space:nowrap;
+  }
+  .badge-present { background:#dcfce7; color:#15803d; }
+  .badge-late    { background:#fef9c3; color:#a16207; }
+  .badge-absent  { background:#fee2e2; color:#dc2626; }
+  .badge-active  { background:#dcfce7; color:#15803d; }
+  .badge-inactive{ background:#f1f5f9; color:#64748b; }
+  .dark .badge-present { background:rgba(21,128,61,0.2);  color:#4ade80; }
+  .dark .badge-late    { background:rgba(161,98,7,0.2);   color:#fbbf24; }
+  .dark .badge-absent  { background:rgba(220,38,38,0.2);  color:#f87171; }
+  .dark .badge-active  { background:rgba(21,128,61,0.2);  color:#4ade80; }
+  .dark .badge-inactive{ background:#334155; color:#94a3b8; }
+
+  /* Modal */
+  .modal-bg {
+    position:fixed; inset:0; z-index:50;
+    background:rgba(0,0,0,0.55);
+    backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center;
+    padding:1rem;
+  }
+  .modal-bg.hidden { display:none; }
+  .modal-box {
+    background:#fff; border-radius:1.25rem;
+    box-shadow:0 25px 60px rgba(0,0,0,0.2);
+    width:100%; max-width:28rem; padding:1.75rem;
+  }
+  .dark .modal-box { background:#1e293b; }
+
+  /* Tables */
+  th {
+    padding:0.75rem 1rem; text-align:left;
+    font-size:0.7rem; font-weight:700;
+    color:#64748b; text-transform:uppercase; letter-spacing:0.07em;
+    white-space:nowrap;
+  }
+  .dark th { color:#94a3b8; }
+  td { padding:0.75rem 1rem; font-size:0.875rem; }
+  tr.row { border-top:1px solid #f8fafc; transition:background 0.1s; }
+  tr.row:hover { background:rgba(248,250,252,0.8); }
+  .dark tr.row { border-top-color:rgba(51,65,85,0.5); }
+  .dark tr.row:hover { background:rgba(51,65,85,0.25); }
+
+  /* Table headers */
+  .qa-thead { background:#f8fafc; }
+  .dark .qa-thead { background:rgba(30,41,59,0.7); }
+  .qa-thead th { border-bottom:1px solid #e2e8f0; }
+  .dark .qa-thead th { border-bottom-color:#334155; }
+
+  /* Topbar */
+  .topbar-btn {
+    display:inline-flex; align-items:center; justify-content:center;
+    padding:0.375rem 0.625rem; border-radius:0.5rem;
+    font-size:0.75rem; font-weight:600; border:none;
+    background:#f1f5f9; color:#374151; cursor:pointer;
+    transition:background 0.15s;
+    text-decoration:none;
+  }
+  .topbar-btn:hover { background:#e2e8f0; }
+  .dark .topbar-btn { background:#334155; color:#e2e8f0; }
+  .dark .topbar-btn:hover { background:#475569; }
+
+  /* Stat cards */
+  .stat-icon { width:2.75rem; height:2.75rem; border-radius:0.875rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .stat-icon-brand { background:#eff6ff; color:#2563eb; }
+  .stat-icon-emerald { background:#f0fdf4; color:#16a34a; }
+  .stat-icon-amber { background:#fffbeb; color:#d97706; }
+  .stat-icon-red { background:#fef2f2; color:#dc2626; }
+  .dark .stat-icon-brand { background:rgba(37,99,235,0.15); color:#60a5fa; }
+  .dark .stat-icon-emerald { background:rgba(22,163,74,0.15); color:#4ade80; }
+  .dark .stat-icon-amber { background:rgba(217,119,6,0.15); color:#fbbf24; }
+  .dark .stat-icon-red { background:rgba(220,38,38,0.15); color:#f87171; }
+</style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
+
+<!-- ===================== APP ROOT ===================== -->
+<div id="app"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  DATA LAYER  (localStorage)
+// ═══════════════════════════════════════════════════════
+const DB = {
+  get(key) { try { return JSON.parse(localStorage.getItem('qa_' + key)) || null; } catch{ return null; } },
+  set(key, val) { localStorage.setItem('qa_' + key, JSON.stringify(val)); },
+  init() {
+    if (!this.get('seeded')) {
+      this.set('departments', [
+        { id:1, name:'Information Technology', name_km:'បច្ចេកវិទ្យាព័ត៌មាន' },
+        { id:2, name:'Human Resources', name_km:'ធនធានមនុស្ស' },
+        { id:3, name:'Finance', name_km:'ហិរញ្ញវត្ថុ' },
+        { id:4, name:'Marketing', name_km:'ទីផ្សារ' },
+      ]);
+      // Seed sample users
+      const seedUsers = [
+        { id:1, name:'System Admin',   email:'admin@company.com',  password:'Admin@123',    role:'admin',    department_id:1, qr_code:'ADM-000001',  photo:'', status:'active', created_at:new Date().toISOString() },
+        { id:2, name:'Sophea Chan',    email:'sophea@company.com', password:'Employee@123', role:'employee', department_id:1, qr_code:'EMP-SOPHEA1', photo:'', status:'active', created_at:new Date().toISOString() },
+        { id:3, name:'Dara Khmer',     email:'dara@company.com',   password:'Employee@123', role:'employee', department_id:2, qr_code:'EMP-DARA001', photo:'', status:'active', created_at:new Date().toISOString() },
+        { id:4, name:'Bopha Srey',     email:'bopha@company.com',  password:'Employee@123', role:'employee', department_id:3, qr_code:'EMP-BOPHA01', photo:'', status:'active', created_at:new Date().toISOString() },
+        { id:5, name:'Virak Pov',      email:'virak@company.com',  password:'Employee@123', role:'employee', department_id:4, qr_code:'EMP-VIRAK01', photo:'', status:'active', created_at:new Date().toISOString() },
+        { id:6, name:'Malis Ros',      email:'malis@company.com',  password:'Employee@123', role:'employee', department_id:1, qr_code:'EMP-MALIS01', photo:'', status:'inactive',created_at:new Date().toISOString() },
+      ];
+      this.set('users', seedUsers);
+
+      // Seed last-7-days attendance for demo
+      const seedAtt = [];
+      let attId = 1;
+      const empIds = [2,3,4,5];
+      for (let i=6; i>=0; i--) {
+        const d = new Date(); d.setDate(d.getDate()-i);
+        const ds = d.toISOString().slice(0,10);
+        empIds.forEach(uid => {
+          if (Math.random() > 0.15) { // 85% chance present
+            const inH = 8 + Math.floor(Math.random()*2); // 08:xx or 09:xx
+            const inM = Math.floor(Math.random()*59);
+            const inDt = new Date(ds+'T0'+inH+':'+String(inM).padStart(2,'0')+':00');
+            const outDt = new Date(inDt.getTime() + (8+Math.random()*2)*3600000);
+            const late = inH >= 9;
+            seedAtt.push({ id:attId++, user_id:uid, date:ds, check_in:inDt.toISOString(), check_out:outDt.toISOString(), status:late?'late':'present', device_info:'Demo' });
+          }
+        });
+      }
+      this.set('attendance', seedAtt);
+      this.set('seeded', true);
+    }
+  },
+  users()       { return this.get('users') || []; },
+  saveUsers(u)  { this.set('users', u); },
+  depts()       { return this.get('departments') || []; },
+  saveDepts(d)  { this.set('departments', d); },
+  attendance()  { return this.get('attendance') || []; },
+  saveAttendance(a) { this.set('attendance', a); },
+  nextId(arr)   { return arr.length ? Math.max(...arr.map(x=>x.id)) + 1 : 1; },
+
+  // Attendance helpers
+  todayStr() { return new Date().toISOString().slice(0,10); },
+  getTodayRecord(userId) {
+    return this.attendance().find(a => a.user_id === userId && a.date === this.todayStr()) || null;
+  },
+  checkIn(userId, deviceInfo) {
+    const now = new Date();
+    const timeStr = now.toTimeString().slice(0,8);
+    const lateThreshold = '09:00:00';
+    const status = timeStr > lateThreshold ? 'late' : 'present';
+    const arr = this.attendance();
+    const rec = {
+      id: this.nextId(arr),
+      user_id: userId,
+      date: this.todayStr(),
+      check_in: now.toISOString(),
+      check_out: null,
+      status,
+      device_info: deviceInfo || navigator.userAgent.slice(0,80)
+    };
+    arr.push(rec);
+    this.saveAttendance(arr);
+    return { action: 'check_in', status };
+  },
+  checkOut(userId) {
+    const arr = this.attendance();
+    const idx = arr.findIndex(a => a.user_id === userId && a.date === this.todayStr());
+    if (idx !== -1) { arr[idx].check_out = new Date().toISOString(); this.saveAttendance(arr); return true; }
+    return false;
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+//  APP STATE
+// ═══════════════════════════════════════════════════════
+const App = {
+  session: null,
+  lang: localStorage.getItem('qa_lang') || 'en',
+  theme: localStorage.getItem('qa_theme') || 'light',
+  page: 'login',
+  chart: null,
+  scannerInstance: null,
+
+  init() {
+    DB.init();
+    this.applyTheme();
+    this.session = DB.get('session');
+    if (this.session) this.navigate(this.session.role === 'admin' ? 'admin_dashboard' : 'emp_dashboard');
+    else this.navigate('login');
+  },
+
+  applyTheme() {
+    document.documentElement.classList.toggle('dark', this.theme === 'dark');
+  },
+
+  setLang(l) { this.lang = l; localStorage.setItem('qa_lang', l); this.render(); },
+  toggleTheme() {
+    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('qa_theme', this.theme);
+    this.applyTheme();
+    this.render();
+  },
+
+  t(key) { return (LANG[this.lang] || LANG.en)[key] || key; },
+
+  navigate(page) {
+    this.stopScanner();
+    this.page = page;
+    this.render();
+    window.scrollTo(0,0);
+  },
+
+  login(email, password) {
+    const user = DB.users().find(u => u.email === email && u.password === password && u.status === 'active');
+    if (!user) return false;
+    this.session = { id: user.id, name: user.name, role: user.role, email: user.email };
+    DB.set('session', this.session);
+    this.navigate(user.role === 'admin' ? 'admin_dashboard' : 'emp_dashboard');
+    return true;
+  },
+
+  logout() {
+    this.stopScanner();
+    this.session = null;
+    DB.set('session', null);
+    this.navigate('login');
+  },
+
+  stopScanner() {
+    if (this.scannerInstance) {
+      try { this.scannerInstance.stop().catch(()=>{}); } catch(e){}
+      this.scannerInstance = null;
+    }
+  },
+
+  render() {
+    const app = document.getElementById('app');
+    if (!this.session || this.page === 'login') {
+      app.innerHTML = renderLogin();
+    } else {
+      app.innerHTML = renderLayout(renderPage(this.page));
+      runAfterRender(this.page);
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+//  LANGUAGES
+// ═══════════════════════════════════════════════════════
+const LANG = {
+  en: {
+    app_name:'QR Attendance', login:'Login', logout:'Logout', email:'Email', password:'Password',
+    dashboard:'Dashboard', employees:'Employees', attendance:'Attendance', reports:'Reports',
+    scanner:'QR Scanner', settings:'Settings', profile:'Profile',
+    total_employees:'Total Employees', present_today:'Present Today', absent_today:'Absent Today', late_today:'Late Today',
+    add_employee:'Add Employee', edit_employee:'Edit Employee', name:'Full Name', department:'Department',
+    role:'Role', status:'Status', actions:'Actions', check_in:'Check In', check_out:'Check Out',
+    date:'Date', search:'Search', save:'Save', cancel:'Cancel', delete:'Delete', edit:'Edit',
+    view_qr:'View QR', recent_activity:'Recent Activity', welcome:'Welcome',
+    my_attendance:'My Attendance', monthly_summary:'Monthly Summary',
+    scan_instruction:'Point camera at employee QR code', no_records:'No records found.',
+    forgot_password:'Forgot Password?', language:'Language', theme:'Theme',
+    employee_dashboard:'My Dashboard', duration:'Duration', dept_overview:'Departments',
+    weekly_chart:'Weekly Attendance', download_qr:'Download QR', manual_entry:'Manual Entry',
+    submit:'Submit', today_scans:"Today's Scans", current_password:'Current Password',
+    new_password:'New Password', update_profile:'Update Profile', back_login:'Back to Login',
+  },
+  km: {
+    app_name:'ប្រព័ន្ធវត្តមាន QR', login:'ចូលប្រើ', logout:'ចាកចេញ', email:'អ៊ីមែល', password:'ពាក្យសម្ងាត់',
+    dashboard:'ផ្ទាំងគ្រប់គ្រង', employees:'បុគ្គលិក', attendance:'វត្តមាន', reports:'របាយការណ៍',
+    scanner:'ស្កេន QR', settings:'ការកំណត់', profile:'ប្រវត្តិរូប',
+    total_employees:'បុគ្គលិកសរុប', present_today:'មកធ្វើការ', absent_today:'អវត្តមាន', late_today:'មកយឺត',
+    add_employee:'បន្ថែមបុគ្គលិក', edit_employee:'កែបុគ្គលិក', name:'ឈ្មោះ', department:'នាយកដ្ឋាន',
+    role:'តួនាទី', status:'ស្ថានភាព', actions:'សកម្មភាព', check_in:'ចូល', check_out:'ចេញ',
+    date:'កាលបរិច្ឆេទ', search:'ស្វែងរក', save:'រក្សាទុក', cancel:'បោះបង់', delete:'លុប', edit:'កែ',
+    view_qr:'មើល QR', recent_activity:'សកម្មភាពថ្មី', welcome:'សូមស្វាគមន៍',
+    my_attendance:'វត្តមានរបស់ខ្ញុំ', monthly_summary:'សង្ខេបខែ',
+    scan_instruction:'ដាក់កាមេរ៉ាទៅលើ QR របស់បុគ្គលិក', no_records:'មិនមានទិន្នន័យ',
+    forgot_password:'ភ្លេចពាក្យសម្ងាត់?', language:'ភាសា', theme:'រូបរាង',
+    employee_dashboard:'ផ្ទាំងរបស់ខ្ញុំ', duration:'រយៈពេល', dept_overview:'នាយកដ្ឋាន',
+    weekly_chart:'វត្តមានប្រចាំសប្ដាហ៍', download_qr:'ទាញយក QR', manual_entry:'បញ្ចូលដោយដៃ',
+    submit:'បញ្ជូន', today_scans:'ការស្កេនថ្ងៃនេះ', current_password:'ពាក្យសម្ងាត់បច្ចុប្បន្ន',
+    new_password:'ពាក្យសម្ងាត់ថ្មី', update_profile:'រក្សាទុកប្រវត្តិ', back_login:'ត្រឡប់ចូល',
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
+const t = k => App.t(k);
+const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—';
+const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '—';
+const deptName = id => {
+  const d = DB.depts().find(x=>x.id===id);
+  if (!d) return '—';
+  return App.lang === 'km' && d.name_km ? d.name_km : d.name;
+};
+const badge = status => {
+  const map = { present:'badge-present',late:'badge-late',absent:'badge-absent',active:'badge-active',inactive:'badge-inactive' };
+  const labels = { present:'Present',late:'Late',absent:'Absent',active:'Active',inactive:'Inactive' };
+  return `<span class="${map[status]||'badge-inactive'}">${labels[status]||status}</span>`;
+};
+const avatar = (name, size='8') =>
+  `<div class="w-${size} h-${size} rounded-full bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300 flex items-center justify-center text-sm font-bold flex-shrink-0">${(name||'?')[0].toUpperCase()}</div>`;
+const genQR = () => 'EMP-' + Math.random().toString(36).substring(2,8).toUpperCase();
+const durStr = (inIso, outIso) => {
+  if (!inIso || !outIso) return '—';
+  const mins = Math.round((new Date(outIso)-new Date(inIso))/60000);
+  return `${Math.floor(mins/60)}h ${mins%60}m`;
+};
+
+// Last 7 days for chart
+function getWeeklyData() {
+  const labels=[], present=[], late=[];
+  const att = DB.attendance();
+  for (let i=6; i>=0; i--) {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const ds = d.toISOString().slice(0,10);
+    labels.push(d.toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+    const dayRecs = att.filter(a=>a.date===ds);
+    present.push(dayRecs.filter(a=>a.status==='present').length);
+    late.push(dayRecs.filter(a=>a.status==='late').length);
+  }
+  return { labels, present, late };
+}
+
+// ═══════════════════════════════════════════════════════
+//  LOGIN PAGE
+// ═══════════════════════════════════════════════════════
+function renderLogin() {
+  return `
+  <div class="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-brand-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+    <div class="w-full max-w-md">
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-2xl shadow-xl shadow-brand-600/30 mb-4">
+          <i class="fa-solid fa-qrcode"></i>
+        </div>
+        <h1 class="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">${t('app_name')}</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm">Employee Attendance Management · វត្តមានបុគ្គលិក</p>
+      </div>
+      <div class="card p-8">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="font-semibold text-lg">${t('login')}</h2>
+          <div class="flex gap-1.5">
+            <button onclick="App.setLang('en')" class="px-2.5 py-1 rounded-lg text-xs font-semibold ${App.lang==='en'?'bg-brand-600 text-white':'bg-gray-100 dark:bg-gray-700'}">EN</button>
+            <button onclick="App.setLang('km')" class="px-2.5 py-1 rounded-lg text-xs font-semibold ${App.lang==='km'?'bg-brand-600 text-white':'bg-gray-100 dark:bg-gray-700'}">ខ្មែរ</button>
+            <button onclick="App.toggleTheme()" class="px-2.5 py-1 rounded-lg text-xs bg-gray-100 dark:bg-gray-700"><i class="fa-solid fa-circle-half-stroke"></i></button>
+          </div>
+        </div>
+        <div id="login-err" class="hidden mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">Invalid email or password.</div>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">${t('email')}</label>
+            <input id="l-email" type="email" class="inp" placeholder="admin@company.com" value="admin@company.com">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">${t('password')}</label>
+            <input id="l-pass" type="password" class="inp" placeholder="••••••••" value="Admin@123"
+              onkeydown="if(event.key==='Enter')doLogin()">
+          </div>
+          <button onclick="doLogin()" class="w-full py-3 rounded-xl bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white font-semibold text-sm transition shadow-lg shadow-brand-600/20 mt-2">
+            ${t('login')} →
+          </button>
+        </div>
+        <p class="text-center text-xs text-gray-400 mt-5">Default: <span class="font-mono">admin@company.com</span> / <span class="font-mono">Admin@123</span></p>
+      </div>
+    </div>
+  </div>`;
+}
+
+function doLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const pass  = document.getElementById('l-pass').value;
+  const err   = document.getElementById('login-err');
+  if (!App.login(email, pass)) {
+    err.classList.remove('hidden');
+    setTimeout(() => err.classList.add('hidden'), 3000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  LAYOUT (Sidebar + Topbar)
+// ═══════════════════════════════════════════════════════
+function renderLayout(pageHtml) {
+  const isAdmin = App.session.role === 'admin';
+  const links = isAdmin
+    ? [['admin_dashboard','fa-gauge',t('dashboard')],['admin_employees','fa-users',t('employees')],['admin_reports','fa-chart-bar',t('reports')],['scanner','fa-qrcode',t('scanner')]]
+    : [['emp_dashboard','fa-gauge',t('dashboard')],['emp_profile','fa-id-badge',t('profile')],['scanner','fa-qrcode',t('scanner')]];
+
+  const navLinks = links.map(([page,icon,label]) =>
+    `<a onclick="App.navigate('${page}')" class="sidebar-link ${App.page===page?'active':''} cursor-pointer">
+      <i class="fa-solid ${icon} w-4 text-center"></i><span>${label}</span>
+    </a>`
+  ).join('');
+
+  return `
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex flex-col lg:translate-x-0 closed">
+      <div class="h-16 flex items-center gap-3 px-5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-sm shadow-md shadow-brand-600/30">
+          <i class="fa-solid fa-qrcode"></i>
+        </div>
+        <div>
+          <div class="font-bold text-sm leading-tight">${t('app_name')}</div>
+          <div class="text-xs text-gray-400">${isAdmin?'Administrator':'Employee'}</div>
+        </div>
+      </div>
+      <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+        ${navLinks}
+        <div class="pt-2 mt-2 border-t border-gray-100 dark:border-gray-800">
+          <a onclick="App.navigate('settings')" class="sidebar-link ${App.page==='settings'?'active':''} cursor-pointer">
+            <i class="fa-solid fa-gear w-4 text-center"></i><span>${t('settings')}</span>
+          </a>
+          <a onclick="App.logout()" class="sidebar-link" style="color:#ef4444" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background=''">
+            <i class="fa-solid fa-right-from-bracket w-4 text-center"></i><span>${t('logout')}</span>
+          </a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <div class="flex-1 lg:ml-64 min-w-0">
+      <!-- Topbar -->
+      <header class="h-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+          <button onclick="toggleSidebar()" class="lg:hidden w-9 h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center text-gray-500">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div>
+            <h1 class="font-bold text-base">${getPageTitle()}</h1>
+            <p class="text-xs text-gray-400 hidden sm:block">${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="App.setLang(App.lang==='en'?'km':'en')" class="topbar-btn">
+            <i class="fa-solid fa-language mr-1"></i>${App.lang==='en'?'ខ្មែរ':'EN'}
+          </button>
+          <button onclick="App.toggleTheme()" class="topbar-btn" style="width:2rem;height:2rem;padding:0">
+            <i class="fa-solid ${App.theme==='dark'?'fa-sun':'fa-moon'}"></i>
+          </button>
+          <div class="flex items-center gap-2 pl-1">
+            ${avatar(App.session.name,'8')}
+            <div class="hidden sm:block">
+              <div class="text-sm font-semibold leading-tight">${App.session.name}</div>
+              <div class="text-xs text-gray-400 capitalize">${App.session.role}</div>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main class="p-4 lg:p-6 fade">${pageHtml}</main>
+    </div>
+  </div>
+  <!-- Sidebar overlay -->
+  <div id="sidebar-overlay" class="fixed inset-0 bg-black/30 z-30 hidden lg:hidden" onclick="toggleSidebar()"></div>`;
+}
+
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  const o = document.getElementById('sidebar-overlay');
+  s.classList.toggle('closed');
+  o.classList.toggle('hidden');
+}
+
+function getPageTitle() {
+  const map = {
+    admin_dashboard:t('dashboard'), admin_employees:t('employees'), admin_reports:t('reports'),
+    scanner:t('scanner'), emp_dashboard:t('employee_dashboard'), emp_profile:t('profile'),
+    settings:t('settings')
+  };
+  return map[App.page] || t('dashboard');
+}
+
+// ═══════════════════════════════════════════════════════
+//  PAGE ROUTER
+// ═══════════════════════════════════════════════════════
+function renderPage(page) {
+  switch(page) {
+    case 'admin_dashboard':   return pageAdminDashboard();
+    case 'admin_employees':   return pageEmployees();
+    case 'admin_reports':     return pageReports();
+    case 'scanner':           return pageScanner();
+    case 'emp_dashboard':     return pageEmpDashboard();
+    case 'emp_profile':       return pageProfile();
+    case 'settings':          return pageSettings();
+    default: return '<p class="text-gray-400">Page not found.</p>';
+  }
+}
+
+function afterRender(page) {
+  if (page === 'admin_dashboard') initDashboardChart();
+  if (page === 'scanner') initScanner();
+}
+
+// ═══════════════════════════════════════════════════════
+//  ADMIN DASHBOARD
+// ═══════════════════════════════════════════════════════
+function pageAdminDashboard() {
+  const users = DB.users().filter(u=>u.role==='employee');
+  const att = DB.attendance().filter(a=>a.date===DB.todayStr());
+  const present = att.filter(a=>a.status==='present').length;
+  const late    = att.filter(a=>a.status==='late').length;
+  const absent  = Math.max(0, users.length - present - late);
+  const depts   = DB.depts();
+
+  const deptRows = depts.map(d => {
+    const cnt = users.filter(u=>u.department_id===d.id).length;
+    const pct = users.length ? Math.round(cnt/users.length*100) : 0;
+    return `<div>
+      <div class="flex justify-between text-sm mb-1">
+        <span class="font-medium">${App.lang==='km'&&d.name_km?d.name_km:d.name}</span>
+        <span class="text-gray-500">${cnt} people</span>
+      </div>
+      <div class="h-2 rounded-full bg-gray-100 dark:bg-gray-700">
+        <div class="h-2 rounded-full bg-brand-500" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const recentAtt = DB.attendance().slice(-8).reverse();
+  const recRows = recentAtt.map(a => {
+    const u = DB.users().find(x=>x.id===a.user_id);
+    if (!u) return '';
+    return `<tr class="row">
+      <td><div class="flex items-center gap-2">${avatar(u.name)} <span class="font-medium">${u.name}</span></div></td>
+      <td class="text-gray-500">${a.date}</td>
+      <td>${fmtTime(a.check_in)}</td>
+      <td>${fmtTime(a.check_out)}</td>
+      <td>${badge(a.status)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" class="py-8 text-center text-gray-400 text-sm">${t('no_records')}</td></tr>`;
+
+  return `
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    ${statCard(t('total_employees'), users.length, 'fa-users', 'brand', '')}
+    ${statCard(t('present_today'), present, 'fa-check-circle', 'emerald', 'text-emerald-600')}
+    ${statCard(t('late_today'), late, 'fa-clock', 'amber', 'text-amber-600')}
+    ${statCard(t('absent_today'), absent, 'fa-circle-xmark', 'red', 'text-red-600')}
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <div class="lg:col-span-2 card p-5">
+      <h3 class="font-semibold mb-4">${t('weekly_chart')}</h3>
+      <canvas id="weekChart" height="120"></canvas>
+    </div>
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">${t('dept_overview')}</h3>
+      <div class="space-y-4">${deptRows}</div>
+    </div>
+  </div>
+  <div class="card overflow-hidden">
+    <div class="p-5 border-b border-gray-100 dark:border-gray-800">
+      <h3 class="font-semibold">${t('recent_activity')}</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full"><thead class="qa-thead">
+        <tr><th>${t('name')}</th><th>${t('date')}</th><th>${t('check_in')}</th><th>${t('check_out')}</th><th>${t('status')}</th></tr>
+      </thead><tbody>${recRows}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function statCard(label, val, icon, color, textCls) {
+  const txtColors = { brand:'color:#2563eb', emerald:'color:#16a34a', amber:'color:#d97706', red:'color:#dc2626' };
+  const txtStyle = txtColors[color] || txtColors.brand;
+  return `<div class="card p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <p style="font-size:0.75rem;font-weight:500;color:#6b7280;margin-bottom:0.25rem">${label}</p>
+        <p style="font-size:1.75rem;font-weight:800;line-height:1;${txtStyle}">${val}</p>
+      </div>
+      <div class="stat-icon stat-icon-${color}">
+        <i class="fa-solid ${icon}"></i>
+      </div>
+    </div>
+  </div>`;
+}
+
+function initDashboardChart() {
+  const canvas = document.getElementById('weekChart');
+  if (!canvas) return;
+  if (App.chart) { App.chart.destroy(); }
+  const { labels, present, late } = getWeeklyData();
+  App.chart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Present', data:present, backgroundColor:'rgba(16,185,129,0.8)', borderRadius:6 },
+        { label:'Late',    data:late,    backgroundColor:'rgba(245,158,11,0.8)',  borderRadius:6 }
+      ]
+    },
+    options: {
+      responsive:true, plugins:{ legend:{position:'bottom'} },
+      scales:{ y:{ beginAtZero:true, ticks:{precision:0}, grid:{color: App.theme==='dark'?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)'} }, x:{ grid:{display:false} } }
+    }
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  EMPLOYEE MANAGEMENT
+// ═══════════════════════════════════════════════════════
+function pageEmployees() {
+  const search = (window._empSearch||'').toLowerCase();
+  const deptFilter = window._empDept||'';
+  let users = DB.users().filter(u=>u.role==='employee');
+  if (search) users = users.filter(u=>u.name.toLowerCase().includes(search)||u.email.toLowerCase().includes(search));
+  if (deptFilter) users = users.filter(u=>String(u.department_id)===deptFilter);
+  const depts = DB.depts();
+
+  const rows = users.map(u => `
+    <tr class="row">
+      <td><div class="flex items-center gap-2.5">${avatar(u.name)} <div><div class="font-semibold text-sm">${u.name}</div><div class="text-xs text-gray-400">${u.email}</div></div></div></td>
+      <td class="hidden sm:table-cell text-gray-500">${deptName(u.department_id)}</td>
+      <td class="hidden md:table-cell">${badge(u.status)}</td>
+      <td class="font-mono text-xs text-gray-400 hidden lg:table-cell">${u.qr_code}</td>
+      <td>
+        <div class="flex items-center gap-1.5 justify-end">
+          <button onclick="showQR('${u.qr_code}','${u.name.replace(/'/g,"\\'")}','${u.id}')" class="w-8 h-8 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-900/30 text-brand-600 flex items-center justify-center text-xs" title="${t('view_qr')}"><i class="fa-solid fa-qrcode"></i></button>
+          <button onclick="openEditEmp(${u.id})" class="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 flex items-center justify-center text-xs" title="${t('edit')}"><i class="fa-solid fa-pen"></i></button>
+          <button onclick="delEmp(${u.id},'${u.name.replace(/'/g,"\'")}')" class="w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-400 flex items-center justify-center text-xs" title="${t('delete')}"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>`).join('') || `<tr><td colspan="5" class="py-10 text-center text-gray-400 text-sm">${t('no_records')}</td></tr>`;
+
+  const deptOpts = depts.map(d=>`<option value="${d.id}" ${deptFilter==d.id?'selected':''}>${d.name}</option>`).join('');
+
+  return `
+  <div class="flex flex-wrap gap-3 justify-between mb-5">
+    <div class="flex gap-2 flex-wrap">
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+        <input oninput="window._empSearch=this.value;reloadPage()" value="${search}" placeholder="${t('search')}..." class="inp pl-8 w-48">
+      </div>
+      <select onchange="window._empDept=this.value;reloadPage()" class="inp w-44">
+        <option value="">All Departments</option>${deptOpts}
+      </select>
+    </div>
+    <button onclick="openAddEmp()" class="btn-primary"><i class="fa-solid fa-plus mr-1.5"></i>${t('add_employee')}</button>
+  </div>
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full"><thead class="qa-thead">
+        <tr><th>${t('name')}</th><th class="hidden sm:table-cell">${t('department')}</th><th class="hidden md:table-cell">${t('status')}</th><th class="hidden lg:table-cell">QR Code</th><th class="text-right">${t('actions')}</th></tr>
+      </thead><tbody>${rows}</tbody></table>
+    </div>
+  </div>
+  <!-- Add/Edit Modal -->
+  <div id="empModal" class="modal-bg hidden">
+    <div class="modal-box">
+      <h3 id="empModalTitle" class="font-bold text-lg mb-5">${t('add_employee')}</h3>
+      <div class="space-y-3">
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1">${t('name')}</label><input id="ef-name" class="inp" placeholder="Full name"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1">${t('email')}</label><input id="ef-email" type="email" class="inp" placeholder="email@company.com"></div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="block text-xs font-semibold text-gray-500 mb-1">${t('department')}</label>
+          <select id="ef-dept" class="inp">${depts.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select></div>
+          <div><label class="block text-xs font-semibold text-gray-500 mb-1">${t('status')}</label>
+          <select id="ef-status" class="inp"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+        </div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1">${t('password')} <span class="font-normal text-gray-400" id="ef-pw-hint">(default: Employee@123)</span></label><input id="ef-pw" type="text" class="inp" placeholder="Leave blank for default"></div>
+      </div>
+      <div class="flex justify-end gap-2 mt-5">
+        <button onclick="closeModal('empModal')" class="btn-secondary">${t('cancel')}</button>
+        <button onclick="saveEmp()" class="btn-primary">${t('save')}</button>
+      </div>
+    </div>
+  </div>
+  <!-- QR Modal -->
+  <div id="qrModal" class="modal-bg hidden">
+    <div class="modal-box text-center">
+      <h3 id="qrModalName" class="font-bold text-lg mb-2"></h3>
+      <p id="qrModalCode" class="text-xs font-mono text-gray-400 mb-4"></p>
+      <div id="qrModalCanvas" class="flex justify-center mb-4"></div>
+      <a id="qrDownloadBtn" class="btn-primary w-full block mb-2 cursor-pointer"><i class="fa-solid fa-download mr-1.5"></i>${t('download_qr')}</a>
+      <button id="qrPrintBtn" class="btn-secondary w-full mb-2"><i class="fa-solid fa-print mr-1.5"></i>Print QR</button>
+      <button onclick="closeModal('qrModal')" class="btn-secondary w-full">${t('cancel')}</button>
+    </div>
+  </div>`;
+}
+
+let _editEmpId = null;
+function openAddEmp() {
+  _editEmpId = null;
+  document.getElementById('empModalTitle').innerText = t('add_employee');
+  document.getElementById('ef-name').value = '';
+  document.getElementById('ef-email').value = '';
+  document.getElementById('ef-pw').value = '';
+  document.getElementById('ef-pw-hint').innerText = '(default: Employee@123)';
+  document.getElementById('ef-status').value = 'active';
+  document.getElementById('empModal').classList.remove('hidden');
+}
+function openEditEmp(id) {
+  const u = DB.users().find(x=>x.id===id);
+  if (!u) return;
+  _editEmpId = id;
+  document.getElementById('empModalTitle').innerText = t('edit_employee');
+  document.getElementById('ef-name').value = u.name;
+  document.getElementById('ef-email').value = u.email;
+  document.getElementById('ef-dept').value = u.department_id;
+  document.getElementById('ef-status').value = u.status;
+  document.getElementById('ef-pw').value = '';
+  document.getElementById('ef-pw-hint').innerText = '(leave blank to keep)';
+  document.getElementById('empModal').classList.remove('hidden');
+}
+function saveEmp() {
+  const name  = document.getElementById('ef-name').value.trim();
+  const email = document.getElementById('ef-email').value.trim();
+  const dept  = parseInt(document.getElementById('ef-dept').value);
+  const status= document.getElementById('ef-status').value;
+  const pw    = document.getElementById('ef-pw').value.trim() || 'Employee@123';
+  if (!name || !email) return Swal.fire('Error','Please fill name and email.','error');
+  let users = DB.users();
+  if (_editEmpId) {
+    const idx = users.findIndex(u=>u.id===_editEmpId);
+    if (idx!==-1) {
+      users[idx] = { ...users[idx], name, email, department_id:dept, status, ...(document.getElementById('ef-pw').value.trim()?{password:pw}:{}) };
+    }
+  } else {
+    if (users.find(u=>u.email===email)) return Swal.fire('Error','Email already in use.','error');
+    users.push({ id:DB.nextId(users), name, email, password:pw, role:'employee', department_id:dept, qr_code:genQR(), photo:'', status, created_at:new Date().toISOString() });
+  }
+  DB.saveUsers(users);
+  closeModal('empModal');
+  toast('Employee saved successfully!');
+  reloadPage();
+}
+function delEmp(id, name) {
+  Swal.fire({ title:`Delete ${name}?`, text:'This will remove the employee and all attendance records.', icon:'warning', showCancelButton:true, confirmButtonColor:'#dc2626', confirmButtonText:'Delete' })
+  .then(r => {
+    if (r.isConfirmed) {
+      DB.saveUsers(DB.users().filter(u=>u.id!==id));
+      DB.saveAttendance(DB.attendance().filter(a=>a.user_id!==id));
+      Swal.fire({icon:'success',title:'Deleted',timer:1200,showConfirmButton:false});
+      reloadPage();
+    }
+  });
+}
+function showQR(code, name, userId) {
+  document.getElementById('qrModalName').innerText = name;
+  document.getElementById('qrModalCode').innerText = code;
+  const c = document.getElementById('qrModalCanvas');
+  c.innerHTML = '';
+  new QRCode(c, { text: code, width: 200, height: 200, colorDark:'#1d4ed8', colorLight:'#ffffff' });
+  setTimeout(() => {
+    const el = c.querySelector('canvas') || c.querySelector('img');
+    if (!el) return;
+    const url = el.tagName === 'CANVAS' ? el.toDataURL('image/png') : el.src;
+    const dl = document.getElementById('qrDownloadBtn');
+    dl.href = url;
+    dl.download = (name || 'employee').replace(/\s+/g,'_') + '_QR.png';
+    const printBtn = document.getElementById('qrPrintBtn');
+    if (printBtn) printBtn.onclick = () => printQR(code, name);
+  }, 200);
+  document.getElementById('qrModal').classList.remove('hidden');
+}
+
+// ═══════════════════════════════════════════════════════
+//  ADMIN REPORTS
+// ═══════════════════════════════════════════════════════
+function pageReports() {
+  const mode       = window._repMode || 'daily';
+  const dateFilter = window._repDate || DB.todayStr();
+  const monthFilter= window._repMonth || DB.todayStr().slice(0,7);
+  const empFilter  = window._repEmp || '';
+  const deptFilter = window._repDept || '';
+
+  let recs = DB.attendance();
+  if (mode==='daily')   recs = recs.filter(a=>a.date===dateFilter);
+  else                  recs = recs.filter(a=>a.date.slice(0,7)===monthFilter);
+  if (empFilter)        recs = recs.filter(a=>String(a.user_id)===empFilter);
+
+  const users   = DB.users().filter(u=>u.role==='employee');
+  const depts   = DB.depts();
+  const empOpts = users.map(u=>`<option value="${u.id}" ${empFilter==u.id?'selected':''}>${u.name}</option>`).join('');
+  const deptOpts= depts.map(d=>`<option value="${d.id}" ${deptFilter==d.id?'selected':''}>${d.name}</option>`).join('');
+
+  if (deptFilter) recs = recs.filter(a=>{ const u=DB.users().find(x=>x.id===a.user_id); return u&&String(u.department_id)===deptFilter; });
+
+  const present = recs.filter(a=>a.status==='present').length;
+  const late    = recs.filter(a=>a.status==='late').length;
+  const absent  = recs.filter(a=>a.status==='absent').length;
+
+  const rows = recs.map(a => {
+    const u = DB.users().find(x=>x.id===a.user_id);
+    if (!u) return '';
+    return `<tr class="row">
+      <td><div class="flex items-center gap-2">${avatar(u.name)}<span class="font-medium">${u.name}</span></div></td>
+      <td class="hidden sm:table-cell text-gray-500">${deptName(u.department_id)}</td>
+      <td class="text-gray-500">${a.date}</td>
+      <td>${fmtTime(a.check_in)}</td>
+      <td>${fmtTime(a.check_out)}</td>
+      <td class="hidden md:table-cell text-gray-500">${durStr(a.check_in,a.check_out)}</td>
+      <td>${badge(a.status)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" class="py-10 text-center text-gray-400 text-sm">${t('no_records')}</td></tr>`;
+
+  return `
+  <div class="card p-4 mb-5">
+    <div class="flex flex-wrap gap-3 items-end">
+      <div><label class="block text-xs font-semibold text-gray-500 mb-1">View</label>
+        <select onchange="window._repMode=this.value;reloadPage()" class="inp w-28">
+          <option value="daily" ${mode==='daily'?'selected':''}>Daily</option>
+          <option value="monthly" ${mode==='monthly'?'selected':''}>Monthly</option>
+        </select></div>
+      ${mode==='daily'
+        ? `<div><label class="block text-xs font-semibold text-gray-500 mb-1">${t('date')}</label><input type="date" value="${dateFilter}" onchange="window._repDate=this.value;reloadPage()" class="inp"></div>`
+        : `<div><label class="block text-xs font-semibold text-gray-500 mb-1">Month</label><input type="month" value="${monthFilter}" onchange="window._repMonth=this.value;reloadPage()" class="inp"></div>`
+      }
+      <div><label class="block text-xs font-semibold text-gray-500 mb-1">${t('employees')}</label>
+        <select onchange="window._repEmp=this.value;reloadPage()" class="inp w-40"><option value="">All</option>${empOpts}</select></div>
+      <div><label class="block text-xs font-semibold text-gray-500 mb-1">${t('department')}</label>
+        <select onchange="window._repDept=this.value;reloadPage()" class="inp w-40"><option value="">All</option>${deptOpts}</select></div>
+      <button onclick="exportCSV()" class="btn-primary"><i class="fa-solid fa-file-csv mr-1.5"></i>Export CSV</button>
+    </div>
+  </div>
+  <div class="grid grid-cols-3 gap-4 mb-5">
+    <div class="card p-4 text-center"><p class="text-2xl font-extrabold text-emerald-600">${present}</p><p class="text-xs text-gray-500 mt-1">Present</p></div>
+    <div class="card p-4 text-center"><p class="text-2xl font-extrabold text-amber-600">${late}</p><p class="text-xs text-gray-500 mt-1">Late</p></div>
+    <div class="card p-4 text-center"><p class="text-2xl font-extrabold text-red-600">${absent}</p><p class="text-xs text-gray-500 mt-1">Absent</p></div>
+  </div>
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full"><thead class="qa-thead">
+        <tr><th>${t('name')}</th><th class="hidden sm:table-cell">${t('department')}</th><th>${t('date')}</th><th>${t('check_in')}</th><th>${t('check_out')}</th><th class="hidden md:table-cell">${t('duration')}</th><th>${t('status')}</th></tr>
+      </thead><tbody>${rows}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function exportCSV() {
+  const mode       = window._repMode || 'daily';
+  const dateFilter = window._repDate || DB.todayStr();
+  const monthFilter= window._repMonth || DB.todayStr().slice(0,7);
+  let recs = DB.attendance();
+  if (mode==='daily') recs = recs.filter(a=>a.date===dateFilter);
+  else recs = recs.filter(a=>a.date.slice(0,7)===monthFilter);
+  const rows = [['Name','Email','Department','Date','Check In','Check Out','Duration','Status']];
+  recs.forEach(a => {
+    const u = DB.users().find(x=>x.id===a.user_id);
+    if (u) rows.push([u.name,u.email,deptName(u.department_id),a.date,fmtTime(a.check_in),fmtTime(a.check_out),durStr(a.check_in,a.check_out),a.status]);
+  });
+  const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=`attendance_${Date.now()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════
+//  QR SCANNER PAGE
+// ═══════════════════════════════════════════════════════
+function pageScanner() {
+  return `
+  <div class="max-w-lg mx-auto space-y-4">
+    <div id="scan-status" class="card p-5 text-center hidden">
+      <div id="scan-icon" class="text-5xl mb-2"></div>
+      <div id="scan-title" class="font-bold text-lg"></div>
+      <div id="scan-detail" class="text-sm text-gray-500 mt-1"></div>
+    </div>
+    <div class="card overflow-hidden">
+      <div class="p-5 border-b border-gray-100 dark:border-gray-800">
+        <h2 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-qrcode text-brand-500"></i> ${t('scanner')}</h2>
+        <p class="text-xs text-gray-400 mt-1">${t('scan_instruction')}</p>
+      </div>
+      <div class="p-4">
+        <div id="qr-reader" class="rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 min-h-[240px] flex items-center justify-center">
+          <div class="text-center text-gray-400 p-6"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i><p class="text-sm">Starting camera…</p></div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+          <p class="text-xs font-semibold text-gray-500 mb-2">${t('manual_entry')}</p>
+          <div class="flex gap-2">
+            <input id="manualQr" placeholder="e.g. EMP-ABC123" class="inp flex-1 uppercase font-mono text-sm" onkeydown="if(event.key==='Enter')manualScan()">
+            <button onclick="manualScan()" class="btn-primary">${t('submit')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card p-5">
+      <h3 class="font-semibold text-sm mb-3">${t('today_scans')}</h3>
+      <div id="scan-log" class="space-y-2 text-sm">
+        <p class="text-gray-400 text-xs">Scan results appear here.</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+function initScanner() {
+  App.stopScanner();
+  let cooldown = false;
+  let lastCode = '';
+
+  Html5Qrcode.getCameras().then(cameras => {
+    if (!cameras || !cameras.length) {
+      document.getElementById('qr-reader').innerHTML = '<div class="p-6 text-center text-sm text-gray-400"><i class="fa-solid fa-camera-slash text-2xl mb-2 block"></i>No camera found. Use manual entry.</div>';
+      return;
+    }
+    const cam = cameras.length > 1 ? cameras[cameras.length-1] : cameras[0];
+    App.scannerInstance = new Html5Qrcode('qr-reader');
+    App.scannerInstance.start(cam.id, { fps:10, qrbox:{width:220,height:220} }, code => {
+      if (cooldown || code === lastCode) return;
+      lastCode = code; cooldown = true;
+      setTimeout(() => { cooldown = false; lastCode = ''; }, 4000);
+      processScan(code);
+    }, null).catch(err => {
+      document.getElementById('qr-reader').innerHTML = '<div class="p-6 text-center text-sm text-red-400"><i class="fa-solid fa-camera-slash text-2xl mb-2 block"></i>Camera access denied. Use manual entry below.</div>';
+    });
+  }).catch(() => {
+    document.getElementById('qr-reader').innerHTML = '<div class="p-6 text-center text-sm text-gray-400"><i class="fa-solid fa-camera-slash text-2xl mb-2 block"></i>Camera unavailable. Use manual entry.</div>';
+  });
+}
+
+function manualScan() {
+  const code = document.getElementById('manualQr').value.trim().toUpperCase();
+  if (!code) return;
+  processScan(code);
+  document.getElementById('manualQr').value = '';
+}
+
+function processScan(code) {
+  const user = DB.users().find(u => u.qr_code === code && u.status === 'active');
+  if (!user) {
+    setScanStatus('error','❌','Employee Not Found','No active employee with this QR code.');
+    addScanLog('Unknown','Not Found',false);
+    return;
+  }
+  const today = DB.getTodayRecord(user.id);
+  let action, label, statusText;
+  if (!today) {
+    const res = DB.checkIn(user.id);
+    action = 'check_in'; label = t('check_in'); statusText = res.status === 'late' ? '⚠️ Marked as Late' : 'On Time';
+    setScanStatus('success','✅', `${user.name} — ${label}`, `${new Date().toLocaleTimeString()} · ${statusText}`);
+  } else if (!today.check_out) {
+    DB.checkOut(user.id);
+    action = 'check_out'; label = t('check_out');
+    setScanStatus('success','👋', `${user.name} — ${label}`, new Date().toLocaleTimeString());
+  } else {
+    setScanStatus('info','ℹ️', `${user.name}`, 'Already completed attendance for today.');
+    addScanLog(user.name,'Already done',false);
+    return;
+  }
+  addScanLog(user.name, label + ' · ' + new Date().toLocaleTimeString(), true);
+}
+
+function setScanStatus(type, icon, title, detail) {
+  const card = document.getElementById('scan-status');
+  if (!card) return;
+  const cls = { success:'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20', error:'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20', info:'border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-900/20' };
+  card.className = `card p-5 text-center border ${cls[type]||cls.info}`;
+  card.classList.remove('hidden');
+  document.getElementById('scan-icon').innerText = icon;
+  document.getElementById('scan-title').innerText = title;
+  document.getElementById('scan-detail').innerText = detail;
+}
+
+function addScanLog(name, action, success) {
+  const log = document.getElementById('scan-log');
+  if (!log) return;
+  if (log.querySelector('p.text-gray-400')) log.innerHTML = '';
+  const item = document.createElement('div');
+  item.className = `flex items-center justify-between px-3 py-2 rounded-xl text-xs ${success?'bg-emerald-50 dark:bg-emerald-900/20':'bg-red-50 dark:bg-red-900/20'}`;
+  item.innerHTML = `<span class="font-semibold">${name}</span><span class="text-gray-500">${action}</span>`;
+  log.prepend(item);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EMPLOYEE DASHBOARD
+// ═══════════════════════════════════════════════════════
+function pageEmpDashboard() {
+  const uid   = App.session.id;
+  const user  = DB.users().find(u=>u.id===uid);
+  if (!user) return '<p>User not found.</p>';
+  const month = window._empMonth || DB.todayStr().slice(0,7);
+  const recs  = DB.attendance().filter(a=>a.user_id===uid && a.date.slice(0,7)===month);
+  const today = DB.getTodayRecord(uid);
+  const present = recs.filter(a=>a.status==='present').length;
+  const late    = recs.filter(a=>a.status==='late').length;
+  const dept    = deptName(user.department_id);
+
+  let todayStatus = `<span class="px-3 py-1.5 rounded-full text-sm font-semibold bg-red-500/20">🔴 Not Checked In</span>`;
+  if (today?.check_out)  todayStatus = `<span class="px-3 py-1.5 rounded-full text-sm font-semibold bg-white/20">✅ Completed · Out: ${fmtTime(today.check_out)}</span>`;
+  else if (today?.check_in) todayStatus = `<span class="px-3 py-1.5 rounded-full text-sm font-semibold bg-emerald-500/20">🟢 Checked In · ${fmtTime(today.check_in)}</span>`;
+
+  const rows = recs.slice().reverse().map(a => `<tr class="row">
+    <td class="text-gray-500">${a.date}</td>
+    <td>${fmtTime(a.check_in)}</td>
+    <td>${fmtTime(a.check_out)}</td>
+    <td class="hidden sm:table-cell text-gray-500">${durStr(a.check_in,a.check_out)}</td>
+    <td>${badge(a.status)}</td>
+  </tr>`).join('') || `<tr><td colspan="5" class="py-6 text-center text-gray-400 text-sm">${t('no_records')}</td></tr>`;
+
+  return `
+  <div class="bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl p-6 text-white mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-4">
+      <div class="w-14 h-14 rounded-2xl bg-white/20 text-white text-2xl font-bold flex items-center justify-center flex-shrink-0">${(user.name||'?')[0].toUpperCase()}</div>
+      <div>
+        <p class="text-brand-100 text-xs">${t('welcome')}</p>
+        <h2 class="text-xl font-extrabold">${user.name}</h2>
+        <p class="text-brand-100 text-sm">${dept}</p>
+      </div>
+    </div>
+    <div class="text-center">${todayStatus}</div>
+  </div>
+  <!-- attendance rate calc -->
+  ${(()=>{ const rate = recs.length ? Math.round((present+late)/recs.length*100) : 0; window._attRate=rate; return ''; })()}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+    ${statCard('Attendance Rate', (window._attRate||0)+'%','fa-chart-line','brand','text-brand-600')}
+    ${statCard('Present',present,'fa-check-circle','emerald','text-emerald-600')}
+    ${statCard('Late',late,'fa-clock','amber','text-amber-600')}
+    ${statCard('Absent',recs.length-present-late,'fa-circle-xmark','red','text-red-600')}
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 card overflow-hidden">
+      <div class="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+        <h3 class="font-semibold">${t('my_attendance')}</h3>
+        <input type="month" value="${month}" onchange="window._empMonth=this.value;reloadPage()" class="inp w-36 text-xs">
+      </div>
+      <div class="overflow-x-auto"><table class="w-full"><thead class="qa-thead">
+        <tr><th>${t('date')}</th><th>${t('check_in')}</th><th>${t('check_out')}</th><th class="hidden sm:table-cell">${t('duration')}</th><th>${t('status')}</th></tr>
+      </thead><tbody>${rows}</tbody></table></div>
+    </div>
+    <div class="card p-5 text-center">
+      <h3 class="font-semibold mb-1">My QR Code</h3>
+      <p class="text-xs text-gray-400 mb-4">Show at scanner for Check-In / Out</p>
+      <div id="myQR" class="flex justify-center mb-4"></div>
+      <p class="text-xs font-mono bg-gray-50 dark:bg-gray-700/50 rounded-xl py-2 px-3 text-gray-500">${user.qr_code}</p>
+      <a id="myQRdl" class="btn-primary block w-full mt-3 cursor-pointer"><i class="fa-solid fa-download mr-1.5"></i>${t('download_qr')}</a>
+      <button onclick="App.navigate('scanner')" class="btn-secondary block w-full mt-2">${t('scanner')}</button>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  EMPLOYEE PROFILE
+// ═══════════════════════════════════════════════════════
+function pageProfile() {
+  const user = DB.users().find(u=>u.id===App.session.id);
+  if (!user) return '';
+  const dept = deptName(user.department_id);
+  return `
+  <div class="max-w-lg mx-auto">
+    <div class="card overflow-hidden">
+      <div class="bg-gradient-to-br from-brand-600 to-brand-800 p-8 text-white text-center">
+        <div class="w-20 h-20 rounded-full bg-white/20 text-white text-3xl font-extrabold flex items-center justify-center mx-auto mb-3 border-4 border-white/30">${(user.name||'?')[0].toUpperCase()}</div>
+        <h2 class="text-xl font-bold">${user.name}</h2>
+        <p class="text-brand-100 text-sm mt-1">${dept}</p>
+        <span class="inline-block mt-2 px-3 py-1 rounded-full bg-white/20 text-xs font-mono">${user.qr_code}</span>
+      </div>
+      <div class="p-6 space-y-4">
+        <div id="prof-msg" class="hidden px-4 py-3 rounded-xl text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1.5">${t('name')}</label><input id="pf-name" class="inp" value="${user.name}"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1.5">${t('email')}</label><input id="pf-email" type="email" class="inp" value="${user.email}"></div>
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-4">
+          <p class="text-xs font-semibold text-gray-400 uppercase mb-3">Change Password (optional)</p>
+          <div class="space-y-3">
+            <div><label class="block text-xs font-semibold text-gray-500 mb-1.5">${t('current_password')}</label><input id="pf-cur" type="password" class="inp" placeholder="Current password"></div>
+            <div><label class="block text-xs font-semibold text-gray-500 mb-1.5">${t('new_password')}</label><input id="pf-new" type="password" class="inp" placeholder="New password"></div>
+          </div>
+        </div>
+        <button onclick="saveProfile()" class="btn-primary w-full py-3">${t('update_profile')}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveProfile() {
+  const name  = document.getElementById('pf-name').value.trim();
+  const email = document.getElementById('pf-email').value.trim();
+  const curPw = document.getElementById('pf-cur').value;
+  const newPw = document.getElementById('pf-new').value;
+  const msg   = document.getElementById('prof-msg');
+  const users = DB.users();
+  const idx   = users.findIndex(u=>u.id===App.session.id);
+  if (!name || !email) { showProfMsg('Please fill name and email.','error'); return; }
+  if (newPw) {
+    if (users[idx].password !== curPw) { showProfMsg('Current password is incorrect.','error'); return; }
+    users[idx].password = newPw;
+  }
+  users[idx].name = name; users[idx].email = email;
+  DB.saveUsers(users);
+  App.session.name = name;
+  DB.set('session', App.session);
+  showProfMsg('Profile updated successfully!','success');
+}
+function showProfMsg(text, type) {
+  const el = document.getElementById('prof-msg');
+  el.className = `px-4 py-3 rounded-xl text-sm ${type==='error'?'bg-red-50 text-red-700 border border-red-100':'bg-emerald-50 text-emerald-700 border border-emerald-100'}`;
+  el.innerText = text; el.classList.remove('hidden');
+  setTimeout(()=>el.classList.add('hidden'),3000);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════════════
+function pageSettings() {
+  return `
+  <div class="max-w-xl mx-auto space-y-4">
+    <div class="card p-6">
+      <h3 class="font-bold text-base mb-5">${t('settings')}</h3>
+      <div class="space-y-5">
+        <div class="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-800">
+          <div><p class="font-semibold text-sm">${t('language')}</p><p class="text-xs text-gray-400 mt-0.5">English · ភាសាខ្មែរ</p></div>
+          <div class="flex gap-1.5">
+            <button onclick="App.setLang('en')" class="topbar-btn" style="${App.lang==='en'?'background:#2563eb;color:#fff;box-shadow:0 2px 8px rgba(37,99,235,0.3)':''}">EN</button>
+            <button onclick="App.setLang('km')" class="topbar-btn" style="${App.lang==='km'?'background:#2563eb;color:#fff;box-shadow:0 2px 8px rgba(37,99,235,0.3)':''}">ខ្មែរ</button>
+          </div>
+        </div>
+        <div class="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-800">
+          <div><p class="font-semibold text-sm">${t('theme')}</p><p class="text-xs text-gray-400 mt-0.5">Light · Dark</p></div>
+          <div class="flex gap-1.5">
+            <button onclick="App.toggleTheme()" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+              <i class="fa-solid ${App.theme==='dark'?'fa-sun':'fa-moon'} mr-1"></i>${App.theme==='dark'?'Light':'Dark'} Mode
+            </button>
+          </div>
+        </div>
+        <div class="py-4">
+          <p class="font-semibold text-sm mb-3">Account</p>
+          <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-gray-500">${t('name')}</span><span class="font-semibold">${App.session.name}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">${t('email')}</span><span class="font-medium text-gray-600 dark:text-gray-300">${App.session.email}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">${t('role')}</span><span class="font-semibold capitalize">${App.session.role}</span></div>
+          </div>
+        </div>
+      </div>
+      <button onclick="App.logout()" class="mt-2 w-full py-2.5 rounded-xl border border-red-200 dark:border-red-900 text-red-600 text-sm font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition">
+        <i class="fa-solid fa-right-from-bracket mr-1.5"></i>${t('logout')}
+      </button>
+    </div>
+    <div class="card p-5">
+      <h3 class="font-semibold text-sm mb-3">Demo Accounts</h3>
+      <div class="space-y-1 text-xs font-mono bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+        <div class="flex justify-between py-1 border-b border-gray-100 dark:border-gray-700"><span class="text-gray-400">Admin</span><span>admin@company.com / Admin@123</span></div>
+        <div class="flex justify-between py-1 border-b border-gray-100 dark:border-gray-700"><span class="text-gray-400">Employee</span><span>sophea@company.com / Employee@123</span></div>
+        <div class="flex justify-between py-1"><span class="text-gray-400">Employee</span><span>dara@company.com / Employee@123</span></div>
+      </div>
+      <button onclick="resetDemoData()" class="mt-3 w-full py-2 rounded-xl border border-amber-200 dark:border-amber-800 text-amber-600 text-xs font-semibold hover:bg-amber-50 dark:hover:bg-amber-900/20 transition">
+        <i class="fa-solid fa-rotate-left mr-1.5"></i>Reset Demo Data
+      </button>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+}
+
+function reloadPage() {
+  App.stopScanner();
+  const page = App.page;
+  const main = document.querySelector('main');
+  if (!main) { App.render(); return; }
+  main.innerHTML = `<div class="fade">${renderPage(page)}</div>`;
+  runAfterRender(page);
+}
+
+function runAfterRender(page) {
+  if (page === 'admin_dashboard') initDashboardChart();
+  if (page === 'scanner')         initScanner();
+  if (page === 'emp_dashboard')   setTimeout(initEmpQR, 120);
+}
+
+function initEmpQR() {
+  const c = document.getElementById('myQR');
+  if (!c) return;
+  const user = DB.users().find(u => u.id === App.session.id);
+  if (!user) return;
+  c.innerHTML = '';
+  new QRCode(c, { text: user.qr_code, width: 180, height: 180, colorDark:'#1d4ed8', colorLight:'#ffffff' });
+  setTimeout(() => {
+    const el = c.querySelector('canvas') || c.querySelector('img');
+    if (!el) return;
+    const url = el.tagName === 'CANVAS' ? el.toDataURL('image/png') : el.src;
+    const dl = document.getElementById('myQRdl');
+    if (dl) { dl.href = url; dl.download = (user.name||'employee').replace(/\s+/g,'_') + '_QR.png'; }
+  }, 250);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXTRA HELPERS
+// ═══════════════════════════════════════════════════════
+
+function resetDemoData() {
+  Swal.fire({
+    title: 'Reset Demo Data?',
+    text: 'This will restore all sample employees and attendance records.',
+    icon: 'warning', showCancelButton: true,
+    confirmButtonColor: '#d97706', confirmButtonText: 'Yes, Reset'
+  }).then(r => {
+    if (!r.isConfirmed) return;
+    // Clear seeded flag so DB.init() re-seeds
+    localStorage.removeItem('qa_seeded');
+    localStorage.removeItem('qa_users');
+    localStorage.removeItem('qa_attendance');
+    localStorage.removeItem('qa_departments');
+    DB.init();
+    App.logout();
+    Swal.fire({ icon:'success', title:'Reset Complete', text:'Log in with admin@company.com / Admin@123', timer:3000, showConfirmButton:false });
+  });
+}
+
+function printQR(code, name) {
+  const win = window.open('','_blank','width=400,height=500');
+  win.document.write(`<!DOCTYPE html><html><head><title>${name} QR</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+    </head><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;gap:12px">
+    <h2 style="margin:0">${name}</h2>
+    <div id="qr"></div>
+    <p style="font-size:12px;color:#888;font-family:monospace">${code}</p>
+    <script>new QRCode(document.getElementById('qr'),{text:'${code}',width:220,height:220});setTimeout(()=>window.print(),600);<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOAST NOTIFICATIONS
+// ═══════════════════════════════════════════════════════
+function toast(msg, type='success') {
+  const colors = { success:'bg-emerald-600', error:'bg-red-600', info:'bg-brand-600', warn:'bg-amber-500' };
+  const icons  = { success:'fa-check-circle', error:'fa-circle-xmark', info:'fa-info-circle', warn:'fa-triangle-exclamation' };
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'fixed bottom-5 right-5 z-[9999] flex flex-col gap-2';
+    document.body.appendChild(container);
+  }
+  const el = document.createElement('div');
+  el.className = `flex items-center gap-3 px-4 py-3 rounded-xl text-white text-sm font-semibold shadow-xl transition-all duration-300 ${colors[type]||colors.info}`;
+  el.innerHTML = `<i class="fa-solid ${icons[type]||icons.info}"></i><span>${msg}</span>`;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transform='translateX(20px)'; setTimeout(()=>el.remove(),300); }, 2800);
+}
+
+// ═══════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════
+function afterRender(page) { runAfterRender(page); }
+
+DB.init();
+App.init();
+</script>
+</body>
+</html>
