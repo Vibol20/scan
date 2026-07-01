@@ -332,8 +332,15 @@ const App = {
 
   stopScanner() {
     if (this.scannerInstance) {
-      try { this.scannerInstance.stop().catch(()=>{}); } catch(e){}
-      this.scannerInstance = null;
+      try {
+        this.scannerInstance.stop().then(() => {
+          try { this.scannerInstance.clear(); } catch(e){}
+          this.scannerInstance = null;
+        }).catch(() => {
+          try { this.scannerInstance.clear(); } catch(e){}
+          this.scannerInstance = null;
+        });
+      } catch(e) { this.scannerInstance = null; }
     }
   },
 
@@ -955,63 +962,194 @@ function exportCSV() {
 //  QR SCANNER PAGE
 // ═══════════════════════════════════════════════════════
 function pageScanner() {
+  const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  const cameraWarning = !isSecure ? `
+    <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:0.75rem;padding:0.875rem 1rem;margin-bottom:1rem;font-size:0.8rem;color:#92400e;">
+      <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+      <strong>Camera requires HTTPS or localhost.</strong> Open this file via a local server, or use Manual Entry below.
+    </div>` : '';
+
   return `
-  <div class="max-w-lg mx-auto space-y-4">
-    <div id="scan-status" class="card p-5 text-center hidden">
-      <div id="scan-icon" class="text-5xl mb-2"></div>
-      <div id="scan-title" class="font-bold text-lg"></div>
-      <div id="scan-detail" class="text-sm text-gray-500 mt-1"></div>
+  <div style="max-width:36rem;margin:0 auto">
+
+    <!-- Status card -->
+    <div id="scan-status" class="card" style="padding:1.5rem;text-align:center;margin-bottom:1rem;display:none">
+      <div id="scan-icon" style="font-size:3rem;margin-bottom:0.5rem"></div>
+      <div id="scan-title" style="font-size:1.1rem;font-weight:700;margin-bottom:0.25rem"></div>
+      <div id="scan-detail" style="font-size:0.875rem;color:#6b7280"></div>
     </div>
-    <div class="card overflow-hidden">
-      <div class="p-5 border-b border-gray-100 dark:border-gray-800">
-        <h2 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-qrcode text-brand-500"></i> ${t('scanner')}</h2>
-        <p class="text-xs text-gray-400 mt-1">${t('scan_instruction')}</p>
+
+    <!-- Scanner card -->
+    <div class="card" style="overflow:hidden;margin-bottom:1rem">
+      <div style="padding:1.25rem 1.25rem 1rem;border-bottom:1px solid #f1f5f9">
+        <h2 style="font-size:1rem;font-weight:700;display:flex;align-items:center;gap:0.5rem">
+          <i class="fa-solid fa-qrcode" style="color:#2563eb"></i> ${t('scanner')}
+        </h2>
+        <p style="font-size:0.78rem;color:#94a3b8;margin-top:0.25rem">${t('scan_instruction')}</p>
       </div>
-      <div class="p-4">
-        <div id="qr-reader" class="rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 min-h-[240px] flex items-center justify-center">
-          <div class="text-center text-gray-400 p-6"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i><p class="text-sm">Starting camera…</p></div>
-        </div>
-        <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-          <p class="text-xs font-semibold text-gray-500 mb-2">${t('manual_entry')}</p>
-          <div class="flex gap-2">
-            <input id="manualQr" placeholder="e.g. EMP-ABC123" class="inp flex-1 uppercase font-mono text-sm" onkeydown="if(event.key==='Enter')manualScan()">
+      <div style="padding:1.25rem">
+        ${cameraWarning}
+
+        <!-- Camera toggle button -->
+        <button id="startCamBtn" onclick="startCamera()" class="btn-primary" style="width:100%;margin-bottom:1rem;padding:0.75rem">
+          <i class="fa-solid fa-camera mr-2"></i>Start Camera Scanner
+        </button>
+
+        <!-- QR reader container — plain div, no flex, fixed height -->
+        <div id="qr-reader" style="width:100%;border-radius:0.75rem;overflow:hidden;background:#f1f5f9;display:none"></div>
+
+        <!-- Stop camera button -->
+        <button id="stopCamBtn" onclick="stopCamera()" class="btn-secondary" style="width:100%;margin-top:0.75rem;display:none">
+          <i class="fa-solid fa-stop mr-2"></i>Stop Camera
+        </button>
+
+        <!-- Manual entry -->
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #f1f5f9">
+          <p style="font-size:0.75rem;font-weight:600;color:#64748b;margin-bottom:0.5rem">${t('manual_entry')}</p>
+          <div style="display:flex;gap:0.5rem">
+            <input id="manualQr" placeholder="e.g. EMP-SOPHEA1" class="inp"
+              style="flex:1;text-transform:uppercase;font-family:monospace"
+              onkeydown="if(event.key==='Enter')manualScan()">
             <button onclick="manualScan()" class="btn-primary">${t('submit')}</button>
           </div>
+          <p style="font-size:0.7rem;color:#94a3b8;margin-top:0.5rem">
+            Demo QR codes: <span style="font-family:monospace">EMP-SOPHEA1</span> · <span style="font-family:monospace">EMP-DARA001</span> · <span style="font-family:monospace">EMP-BOPHA01</span>
+          </p>
         </div>
       </div>
     </div>
-    <div class="card p-5">
-      <h3 class="font-semibold text-sm mb-3">${t('today_scans')}</h3>
-      <div id="scan-log" class="space-y-2 text-sm">
-        <p class="text-gray-400 text-xs">Scan results appear here.</p>
+
+    <!-- Today scan log -->
+    <div class="card" style="padding:1.25rem">
+      <h3 style="font-size:0.875rem;font-weight:600;margin-bottom:0.75rem">${t('today_scans')}</h3>
+      <div id="scan-log">
+        <p style="font-size:0.75rem;color:#94a3b8">Scan results appear here.</p>
       </div>
     </div>
   </div>`;
 }
 
+let _scanCooldown = false;
+let _lastCode = '';
+
 function initScanner() {
-  App.stopScanner();
-  let cooldown = false;
-  let lastCode = '';
+  // Scanner is user-initiated via startCamera() button
+  // Nothing auto-starts here
+}
+
+function startCamera() {
+  const readerEl = document.getElementById('qr-reader');
+  const startBtn = document.getElementById('startCamBtn');
+  const stopBtn  = document.getElementById('stopCamBtn');
+  if (!readerEl) return;
+
+  // Show loader
+  readerEl.style.display = 'block';
+  readerEl.innerHTML = '<div style="padding:2rem;text-align:center;color:#94a3b8"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem;display:block;margin-bottom:0.5rem"></i><p style="font-size:0.875rem">Requesting camera access…</p></div>';
+  if (startBtn) startBtn.style.display = 'none';
+  if (stopBtn)  stopBtn.style.display  = 'block';
+
+  // Cleanup any previous instance first
+  if (App.scannerInstance) {
+    try {
+      App.scannerInstance.stop().then(() => {
+        try { App.scannerInstance.clear(); } catch(e){}
+        App.scannerInstance = null;
+        _startQrScan();
+      }).catch(() => { App.scannerInstance = null; _startQrScan(); });
+    } catch(e) { App.scannerInstance = null; _startQrScan(); }
+  } else {
+    _startQrScan();
+  }
+}
+
+function _startQrScan() {
+  const readerEl = document.getElementById('qr-reader');
+  if (!readerEl) return;
+
+  // Clear the div so html5-qrcode gets a fresh element
+  readerEl.innerHTML = '';
 
   Html5Qrcode.getCameras().then(cameras => {
     if (!cameras || !cameras.length) {
-      document.getElementById('qr-reader').innerHTML = '<div class="p-6 text-center text-sm text-gray-400"><i class="fa-solid fa-camera-slash text-2xl mb-2 block"></i>No camera found. Use manual entry.</div>';
+      _scanError('No camera found on this device.');
       return;
     }
-    const cam = cameras.length > 1 ? cameras[cameras.length-1] : cameras[0];
-    App.scannerInstance = new Html5Qrcode('qr-reader');
-    App.scannerInstance.start(cam.id, { fps:10, qrbox:{width:220,height:220} }, code => {
-      if (cooldown || code === lastCode) return;
-      lastCode = code; cooldown = true;
-      setTimeout(() => { cooldown = false; lastCode = ''; }, 4000);
-      processScan(code);
-    }, null).catch(err => {
-      document.getElementById('qr-reader').innerHTML = '<div class="p-6 text-center text-sm text-red-400"><i class="fa-solid fa-camera-slash text-2xl mb-2 block"></i>Camera access denied. Use manual entry below.</div>';
+    // Prefer back camera on mobile
+    const cam = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
+
+    const scanner = new Html5Qrcode('qr-reader', { verbose: false });
+    App.scannerInstance = scanner;
+
+    const config = {
+      fps: 10,
+      qrbox: (w, h) => {
+        const size = Math.min(w, h, 280);
+        return { width: size, height: size };
+      },
+      aspectRatio: 1.0,
+      rememberLastUsedCamera: true,
+    };
+
+    scanner.start(
+      { deviceId: { exact: cam.id } },
+      config,
+      (decodedText) => {
+        if (_scanCooldown || decodedText === _lastCode) return;
+        _lastCode = decodedText;
+        _scanCooldown = true;
+        setTimeout(() => { _scanCooldown = false; _lastCode = ''; }, 4000);
+        processScan(decodedText);
+      },
+      null // ignore per-frame errors
+    ).catch(err => {
+      console.warn('QR start error:', err);
+      // Fallback: try without exact device constraint
+      scanner.start(
+        { facingMode: 'environment' },
+        config,
+        (decodedText) => {
+          if (_scanCooldown || decodedText === _lastCode) return;
+          _lastCode = decodedText;
+          _scanCooldown = true;
+          setTimeout(() => { _scanCooldown = false; _lastCode = ''; }, 4000);
+          processScan(decodedText);
+        },
+        null
+      ).catch(err2 => {
+        console.warn('QR fallback error:', err2);
+        _scanError('Camera access denied. Please allow camera permission and try again.');
+      });
     });
-  }).catch(() => {
-    document.getElementById('qr-reader').innerHTML = '<div class="p-6 text-center text-sm text-gray-400"><i class="fa-solid fa-camera-slash text-2xl mb-2 block"></i>Camera unavailable. Use manual entry.</div>';
+
+  }).catch(err => {
+    console.warn('getCameras error:', err);
+    _scanError('Could not access cameras. Try using HTTPS or localhost.');
   });
+}
+
+function _scanError(msg) {
+  const readerEl = document.getElementById('qr-reader');
+  const startBtn = document.getElementById('startCamBtn');
+  const stopBtn  = document.getElementById('stopCamBtn');
+  if (readerEl) readerEl.innerHTML = `<div style="padding:2rem;text-align:center;color:#ef4444"><i class="fa-solid fa-camera-slash" style="font-size:1.5rem;display:block;margin-bottom:0.5rem"></i><p style="font-size:0.875rem">${msg}</p></div>`;
+  if (startBtn) startBtn.style.display = 'flex';
+  if (stopBtn)  stopBtn.style.display  = 'none';
+}
+
+function stopCamera() {
+  const startBtn = document.getElementById('startCamBtn');
+  const stopBtn  = document.getElementById('stopCamBtn');
+  const readerEl = document.getElementById('qr-reader');
+  if (App.scannerInstance) {
+    App.scannerInstance.stop().then(() => {
+      try { App.scannerInstance.clear(); } catch(e){}
+      App.scannerInstance = null;
+    }).catch(() => { App.scannerInstance = null; });
+  }
+  if (startBtn) startBtn.style.display = 'flex';
+  if (stopBtn)  stopBtn.style.display  = 'none';
+  if (readerEl) { readerEl.style.display = 'none'; readerEl.innerHTML = ''; }
 }
 
 function manualScan() {
@@ -1034,10 +1172,12 @@ function processScan(code) {
     const res = DB.checkIn(user.id);
     action = 'check_in'; label = t('check_in'); statusText = res.status === 'late' ? '⚠️ Marked as Late' : 'On Time';
     setScanStatus('success','✅', `${user.name} — ${label}`, `${new Date().toLocaleTimeString()} · ${statusText}`);
+    addScanLog(user.name, label + ' · ' + new Date().toLocaleTimeString(), true);
   } else if (!today.check_out) {
     DB.checkOut(user.id);
     action = 'check_out'; label = t('check_out');
     setScanStatus('success','👋', `${user.name} — ${label}`, new Date().toLocaleTimeString());
+    addScanLog(user.name, label + ' · ' + new Date().toLocaleTimeString(), true);
   } else {
     setScanStatus('info','ℹ️', `${user.name}`, 'Already completed attendance for today.');
     addScanLog(user.name,'Already done',false);
@@ -1049,22 +1189,36 @@ function processScan(code) {
 function setScanStatus(type, icon, title, detail) {
   const card = document.getElementById('scan-status');
   if (!card) return;
-  const cls = { success:'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20', error:'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20', info:'border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-900/20' };
-  card.className = `card p-5 text-center border ${cls[type]||cls.info}`;
-  card.classList.remove('hidden');
+  const styles = {
+    success: 'background:#f0fdf4;border:1px solid #bbf7d0',
+    error:   'background:#fef2f2;border:1px solid #fecaca',
+    info:    'background:#eff6ff;border:1px solid #bfdbfe',
+    loading: 'background:#f8fafc;border:1px solid #e2e8f0',
+  };
+  card.style.cssText = `padding:1.5rem;text-align:center;border-radius:1rem;margin-bottom:1rem;${styles[type]||styles.info}`;
+  card.style.display = 'block';
   document.getElementById('scan-icon').innerText = icon;
   document.getElementById('scan-title').innerText = title;
   document.getElementById('scan-detail').innerText = detail;
+
+  // Auto-hide after 5s for success/error
+  if (type !== 'loading') {
+    clearTimeout(card._hideTimer);
+    card._hideTimer = setTimeout(() => { card.style.display = 'none'; }, 5000);
+  }
 }
 
 function addScanLog(name, action, success) {
   const log = document.getElementById('scan-log');
   if (!log) return;
-  if (log.querySelector('p.text-gray-400')) log.innerHTML = '';
+  // Clear placeholder on first real entry
+  if (log.querySelector('p')) log.innerHTML = '';
   const item = document.createElement('div');
-  item.className = `flex items-center justify-between px-3 py-2 rounded-xl text-xs ${success?'bg-emerald-50 dark:bg-emerald-900/20':'bg-red-50 dark:bg-red-900/20'}`;
-  item.innerHTML = `<span class="font-semibold">${name}</span><span class="text-gray-500">${action}</span>`;
+  item.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0.75rem;border-radius:0.75rem;font-size:0.78rem;margin-bottom:0.375rem;${success?'background:#f0fdf4':'background:#fef2f2'}`;
+  item.innerHTML = `<span style="font-weight:600">${name}</span><span style="color:#6b7280">${action}</span>`;
   log.prepend(item);
+  // Cap at 10 entries
+  while (log.children.length > 10) log.removeChild(log.lastChild);
 }
 
 // ═══════════════════════════════════════════════════════
